@@ -32,14 +32,14 @@ PG_CONN = {
 CATEGORIES = ["Feedback", "Pending", "Question", "Request", "Other", "Update"]
 ICONS = {
     "Feedback": "💬", "Pending": "⏳", "Question": "❓",
-    "Request": "📥",  "Other":   "🔹", "Update":   "🔄"
+    "Request":  "📥", "Other":   "🔹", "Update":   "🔄"
 }
 USERS = ["Aldo", "Moni"]
 ADMIN_PASSWORD = "Pa27Ma15"
 CATEGORY_COLORS = {
-    "Question": "#2979FF", "Pending":  "#FF9800",
-    "Update":   "#009688", "Request":  "#8E24AA",
-    "Feedback": "#43A047", "Other":    "#546E7A"
+    "Question": "#2979FF", "Pending": "#FF9800",
+    "Update":   "#009688", "Request": "#8E24AA",
+    "Feedback": "#43A047", "Other": "#546E7A"
 }
 USER_COLORS = {"Aldo": "#23c053", "Moni": "#e754c5"}
 
@@ -184,14 +184,21 @@ def main():
     st.sidebar.header("User")
     st.sidebar.radio("Select user:", USERS, key="current_user")
     st.sidebar.markdown("---")
+
     st.sidebar.header("Filter")
-    dates = sorted({d for e in st.session_state.entries if (d := get_entry_date(e))}, reverse=True)
-    st.sidebar.date_input("Date", value=None,
-                          min_value=(dates[-1] if dates else None),
-                          max_value=(dates[0]  if dates else None),
-                          key="filter_date")
+    dates = sorted(
+        {d for e in st.session_state.entries if (d := get_entry_date(e))},
+        reverse=True
+    )
+    st.sidebar.date_input(
+        "Date", value=None,
+        min_value=(dates[-1] if dates else None),
+        max_value=(dates[0]  if dates else None),
+        key="filter_date"
+    )
     st.sidebar.text_input("Search", "", key="filter_keyword")
     st.sidebar.markdown("---")
+
     st.sidebar.subheader("Admin: Delete")
     st.sidebar.text_input("Password", type="password", key="admin_pwd")
     st.sidebar.button("Delete ALL", on_click=delete_all_callback)
@@ -205,24 +212,28 @@ def main():
 
     # New comment
     st.subheader("Add a new comment")
-    st.selectbox("Category", CATEGORIES,
-                 format_func=lambda c: f"{ICONS[c]} {c}",
-                 key="new_category")
+    st.selectbox(
+        "Category", CATEGORIES,
+        format_func=lambda c: f"{ICONS[c]} {c}",
+        key="new_category"
+    )
 
     if has_quill:
         st_quill(html=True, key="new_content")
     elif has_ace:
-        st_ace(value=st.session_state.new_content,
-               language="html", theme="monokai",
-               key="new_content", height=200)
+        st_ace(
+            value=st.session_state.new_content,
+            language="html", theme="monokai",
+            key="new_content", height=200
+        )
     else:
         st.text_area("Comment", height=200, key="new_content")
 
-    # Option 1: button returns True, so we can clear the editor right here
+    # add comment button (clears editor on click)
     if st.button("Add comment"):
         add_comment_callback()
 
-    # Display entries
+    # Display entries with separators
     filtered = []
     for idx, e in enumerate(st.session_state.entries):
         if st.session_state.filter_date and get_entry_date(e) != st.session_state.filter_date:
@@ -234,7 +245,12 @@ def main():
 
     if filtered:
         st.markdown("## Entries")
-        for idx, e in filtered:
+        for i, (idx, e) in enumerate(filtered):
+            # divider between threads
+            if i > 0:
+                st.divider()
+
+            # Header
             header_html = (
                 f"{colored_name(e['user'])} "
                 f"{category_label(e['category'])} — "
@@ -242,20 +258,24 @@ def main():
             )
             st.markdown(header_html, unsafe_allow_html=True)
 
+            # Close / Closed
             if not e["closed"]:
                 st.button("Close", key=f"close_{idx}",
                           on_click=close_entry_callback, args=(idx,))
             else:
                 st.markdown("**Closed**")
 
+            # Main comment
             st.markdown(e["comment"], unsafe_allow_html=True)
 
+            # Replies
             for r in e.get("replies", []):
                 st.markdown(
                     f"> **{r['user']}** — {r['datetime']}\n> {r['comment']}",
                     unsafe_allow_html=True
                 )
 
+            # Reply button & editor
             if not e["closed"]:
                 st.button("Reply", key=f"reply_btn_{idx}",
                           on_click=lambda i=idx: st.session_state.__setitem__("active_reply", i))
@@ -265,9 +285,11 @@ def main():
                 if has_quill:
                     st_quill(html=True, key=reply_key)
                 elif has_ace:
-                    st_ace(value=st.session_state.get(reply_key, ""),
-                           language="html", theme="monokai",
-                           key=reply_key, height=150)
+                    st_ace(
+                        value=st.session_state.get(reply_key, ""),
+                        language="html", theme="monokai",
+                        key=reply_key, height=150
+                    )
                 else:
                     st.text_area("Your reply", key=reply_key, height=150)
 
