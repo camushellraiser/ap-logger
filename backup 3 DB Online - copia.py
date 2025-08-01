@@ -136,7 +136,7 @@ def add_comment_callback():
         st.session_state.entries.insert(0, entry)
         save_entries(st.session_state.entries)
         st.session_state.new_content = ""
-        st.experimental_rerun()  # <-- this clears the field immediately
+        st.rerun()
 
 def close_entry_callback(idx):
     st.session_state.entries[idx]['closed'] = True
