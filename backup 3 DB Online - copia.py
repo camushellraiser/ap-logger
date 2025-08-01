@@ -18,7 +18,7 @@ import pytz
 from pytz import timezone
 import json
 
-# --- Conexión Neon ---
+# --- Neon DB connection ---
 PG_CONN = {
     "dbname": "neondb",
     "user": "neondb_owner",
@@ -28,7 +28,7 @@ PG_CONN = {
     "sslmode": "require"
 }
 
-# --- Constantes de UI ---
+# --- UI constants ---
 CATEGORIES = ["Feedback", "Pending", "Question", "Request", "Other", "Update"]
 ICONS = {
     "Feedback": "💬", "Pending": "⏳", "Question": "❓",
@@ -37,9 +37,9 @@ ICONS = {
 USERS = ["Aldo", "Moni"]
 ADMIN_PASSWORD = "Pa27Ma15"
 CATEGORY_COLORS = {
-    "Question": "#2979FF", "Pending": "#FF9800",
-    "Update": "#009688",   "Request": "#8E24AA",
-    "Feedback": "#43A047", "Other":   "#546E7A"
+    "Question": "#2979FF", "Pending":  "#FF9800",
+    "Update":   "#009688", "Request":  "#8E24AA",
+    "Feedback": "#43A047", "Other":    "#546E7A"
 }
 USER_COLORS = {"Aldo": "#23c053", "Moni": "#e754c5"}
 
@@ -47,8 +47,8 @@ def get_pg_conn():
     return psycopg2.connect(**PG_CONN)
 
 def format_datetime_pst(dt):
-    tz = timezone('America/Los_Angeles')
-    return dt.astimezone(tz).strftime("%d %b %Y - %I:%M %p") + " PST"
+    la = timezone("America/Los_Angeles")
+    return dt.astimezone(la).strftime("%d %b %Y - %I:%M %p") + " PST"
 
 def colored_name(user):
     col = USER_COLORS.get(user, "#000")
@@ -69,15 +69,15 @@ def load_entries():
             cur.execute("SELECT * FROM logger_entries ORDER BY id DESC")
             rows = cur.fetchall()
     entries = []
-    for row in rows:
+    for r in rows:
         entries.append({
-            "id":        row["id"],
-            "user":      row["user_name"],
-            "category":  row["category"],
-            "comment":   row["comment"],
-            "datetime":  row["datetime"],
-            "replies":   row["replies"] or [],
-            "closed":    row["closed"]
+            "id":       r["id"],
+            "user":     r["user_name"],
+            "category": r["category"],
+            "comment":  r["comment"],
+            "datetime": r["datetime"],
+            "replies":  r["replies"] or [],
+            "closed":   r["closed"]
         })
     return entries
 
@@ -102,31 +102,29 @@ def save_entries(entries):
 
 def get_entry_date(e):
     try:
-        date_str = e['datetime'].split(' - ')[0]
-        return datetime.strptime(date_str, '%d %b %Y').date()
+        d = e["datetime"].split(" - ")[0]
+        return datetime.strptime(d, "%d %b %Y").date()
     except:
         return None
 
 def add_comment_callback():
-    user     = st.session_state.current_user
-    category = st.session_state.new_category
-    content  = st.session_state.new_content.strip()
+    content = st.session_state.new_content.strip()
     if content:
         entry = {
-            'user':     user,
-            'category': category,
-            'comment':  content,
-            'datetime': format_datetime_pst(datetime.now(pytz.utc)),
-            'replies':  [],
-            'closed':   False
+            "user":     st.session_state.current_user,
+            "category": st.session_state.new_category,
+            "comment":  content,
+            "datetime": format_datetime_pst(datetime.now(pytz.utc)),
+            "replies":  [],
+            "closed":   False
         }
         st.session_state.entries.insert(0, entry)
         save_entries(st.session_state.entries)
-        # limpia el editor
-        st.session_state.new_content = ""
+    # clear the editor
+    st.session_state.new_content = ""
 
 def close_entry_callback(idx):
-    st.session_state.entries[idx]['closed'] = True
+    st.session_state.entries[idx]["closed"] = True
     save_entries(st.session_state.entries)
 
 def send_reply_callback(idx):
@@ -134,11 +132,11 @@ def send_reply_callback(idx):
     content = st.session_state.get(key, "").strip()
     if content:
         reply = {
-            'user':     st.session_state.current_user,
-            'comment':  content,
-            'datetime': format_datetime_pst(datetime.now(pytz.utc))
+            "user":     st.session_state.current_user,
+            "comment":  content,
+            "datetime": format_datetime_pst(datetime.now(pytz.utc))
         }
-        st.session_state.entries[idx]['replies'].append(reply)
+        st.session_state.entries[idx]["replies"].append(reply)
         save_entries(st.session_state.entries)
     st.session_state.active_reply = None
     st.session_state[key] = ""
@@ -159,16 +157,14 @@ def delete_by_date_callback():
             if get_entry_date(e) != st.session_state.del_date
         ]
         save_entries(st.session_state.entries)
-        st.sidebar.success(
-            f"Deleted {before - len(st.session_state.entries)} entries on {st.session_state.del_date}"
-        )
+        st.sidebar.success(f"Deleted {before - len(st.session_state.entries)} entries on {st.session_state.del_date}")
     else:
-        st.sidebar.error("Invalid password")
+        st.sidebar.error("Invalid password or date")
 
 def main():
     st.set_page_config(page_title="Logger", layout="wide")
 
-    # inicializa estados
+    # initialize session state
     defaults = {
         "entries":        load_entries(),
         "current_user":   USERS[0],
@@ -184,21 +180,16 @@ def main():
         if k not in st.session_state:
             st.session_state[k] = v
 
-    # Sidebar: User & Filters & Admin
+    # Sidebar
     st.sidebar.header("User")
     st.sidebar.radio("Select user:", USERS, key="current_user")
     st.sidebar.markdown("---")
     st.sidebar.header("Filter")
-    dates = sorted(
-        {d for e in st.session_state.entries if (d := get_entry_date(e))},
-        reverse=True
-    )
-    st.sidebar.date_input(
-        "Date", value=None,
-        min_value=(dates[-1] if dates else None),
-        max_value=(dates[0]  if dates else None),
-        key="filter_date"
-    )
+    dates = sorted({d for e in st.session_state.entries if (d := get_entry_date(e))}, reverse=True)
+    st.sidebar.date_input("Date", value=None,
+                          min_value=(dates[-1] if dates else None),
+                          max_value=(dates[0]  if dates else None),
+                          key="filter_date")
     st.sidebar.text_input("Search", "", key="filter_keyword")
     st.sidebar.markdown("---")
     st.sidebar.subheader("Admin: Delete")
@@ -209,35 +200,29 @@ def main():
 
     # Main header
     user = st.session_state.current_user
-    st.markdown(
-        f"<h1 style='text-align:center;color:{USER_COLORS[user]}'>{user}</h1>",
-        unsafe_allow_html=True
-    )
+    st.markdown(f"<h1 style='text-align:center;color:{USER_COLORS[user]}'>{user}</h1>", unsafe_allow_html=True)
     st.markdown("---")
 
-    # Add new comment
+    # New comment
     st.subheader("Add a new comment")
-    st.selectbox(
-        "Category", CATEGORIES,
-        format_func=lambda c: f"{ICONS[c]} {c}",
-        key="new_category"
-    )
+    st.selectbox("Category", CATEGORIES,
+                 format_func=lambda c: f"{ICONS[c]} {c}",
+                 key="new_category")
+
     if has_quill:
         st_quill(html=True, key="new_content")
     elif has_ace:
-        st_ace(
-            value=st.session_state.new_content,
-            language="html", theme="monokai",
-            key="new_content", height=200
-        )
+        st_ace(value=st.session_state.new_content,
+               language="html", theme="monokai",
+               key="new_content", height=200)
     else:
         st.text_area("Comment", height=200, key="new_content")
 
-    # Opción 1: botón sin callback, limpia inmediatamente
+    # Option 1: button returns True, so we can clear the editor right here
     if st.button("Add comment"):
         add_comment_callback()
 
-    # Mostrar entradas
+    # Display entries
     filtered = []
     for idx, e in enumerate(st.session_state.entries):
         if st.session_state.filter_date and get_entry_date(e) != st.session_state.filter_date:
@@ -280,11 +265,9 @@ def main():
                 if has_quill:
                     st_quill(html=True, key=reply_key)
                 elif has_ace:
-                    st_ace(
-                        value=st.session_state.get(reply_key, ""),
-                        language="html", theme="monokai",
-                        key=reply_key, height=150
-                    )
+                    st_ace(value=st.session_state.get(reply_key, ""),
+                           language="html", theme="monokai",
+                           key=reply_key, height=150)
                 else:
                     st.text_area("Your reply", key=reply_key, height=150)
 
