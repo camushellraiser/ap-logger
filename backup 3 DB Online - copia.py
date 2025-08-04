@@ -7,7 +7,7 @@ import psycopg2
 import psycopg2.extras
 import json
 
-# — Optional editors —
+# Optional editors
 try:
     from streamlit_quill import st_quill
     HAS_QUILL = True
@@ -20,8 +20,7 @@ try:
 except ImportError:
     HAS_ACE = False
 
-# — Neon DB connection —
-PG_CONN = {
+# Neon DB connection\ nPG_CONN = {
     "dbname":   "neondb",
     "user":     "neondb_owner",
     "password": "npg_RpJPZ5dGLhm9",
@@ -30,12 +29,9 @@ PG_CONN = {
     "sslmode":  "require"
 }
 
-# — UI constants —
+# UI constants
 CATEGORIES = ["Feedback", "Pending", "Question", "Request", "Other", "Update"]
-ICONS = {
-    "Feedback": "💬", "Pending": "⏳", "Question": "❓",
-    "Request":  "📥", "Other":   "🔹", "Update":   "🔄"
-}
+ICONS = {"Feedback": "💬", "Pending": "⏳", "Question": "❓", "Request": "📥", "Other": "🔹", "Update": "🔄"}
 USERS           = ["Aldo", "Moni"]
 ADMIN_PASSWORD  = "Pa27Ma15"
 CATEGORY_COLORS = {
@@ -45,7 +41,7 @@ CATEGORY_COLORS = {
 }
 USER_COLORS = {"Aldo": "#23c053", "Moni": "#e754c5"}
 
-# — Helpers —
+# Helpers
 
 def get_pg_conn():
     return psycopg2.connect(**PG_CONN)
@@ -111,7 +107,7 @@ def get_entry_date(e):
     except:
         return None
 
-# — Callbacks using dynamic editor_key —
+# Callbacks with dynamic editor key
 
 def add_comment_callback(editor_key):
     raw = st.session_state.get(editor_key, "")
@@ -126,16 +122,18 @@ def add_comment_callback(editor_key):
             "closed":   False
         })
         save_entries(st.session_state.entries)
-    # bump the editor so next render is fresh
+    # bump editor to reset
     st.session_state.editor_version += 1
 
+
 def clear_comment_callback(editor_key):
-    # simply bump the editor to re-init
     st.session_state.editor_version += 1
+
 
 def close_entry_callback(idx):
     st.session_state.entries[idx]["closed"] = True
     save_entries(st.session_state.entries)
+
 
 def send_reply_callback(idx):
     key = f"reply_content_{idx}"
@@ -151,6 +149,7 @@ def send_reply_callback(idx):
     st.session_state.active_reply = None
     st.session_state[key] = ""
 
+
 def delete_all_callback():
     if st.session_state.admin_pwd == ADMIN_PASSWORD:
         st.session_state.entries = []
@@ -158,6 +157,7 @@ def delete_all_callback():
         st.sidebar.success("All entries deleted.")
     else:
         st.sidebar.error("Invalid password")
+
 
 def delete_by_date_callback():
     if st.session_state.admin_pwd == ADMIN_PASSWORD and st.session_state.del_date:
@@ -171,19 +171,21 @@ def delete_by_date_callback():
     else:
         st.sidebar.error("Invalid password or date")
 
-# — Main app —
+# Main
 
 def main():
     st.set_page_config(page_title="Logger", layout="wide")
 
-    # initialize session state
+    # init editor_version
     if "editor_version" not in st.session_state:
         st.session_state.editor_version = 0
 
+    # defaults
     defaults = {
         "entries":        load_entries(),
         "current_user":   USERS[0],
         "new_category":   CATEGORIES[0],
+        "filter_use_date": True,
         "filter_date":    date.today(),
         "filter_keyword": "",
         "filter_open":    False,
@@ -195,23 +197,27 @@ def main():
         if k not in st.session_state:
             st.session_state[k] = v
 
-    # — Sidebar —
+    # Sidebar
     st.sidebar.header("User")
     st.sidebar.radio("Select user:", USERS, key="current_user")
     st.sidebar.markdown("---")
 
     st.sidebar.header("Filter")
+    st.sidebar.checkbox("Filter by date", key="filter_use_date")
     all_dates = sorted(
         {d for e in st.session_state.entries if (d := get_entry_date(e))},
         reverse=True
     )
-    st.sidebar.date_input(
-        "Date",
-        value=st.session_state.filter_date,
-        min_value=(all_dates[-1] if all_dates else None),
-        max_value=(all_dates[0]  if all_dates else None),
-        key="filter_date"
-    )
+    date_input_args = {
+        "label": "Date",
+        "value": st.session_state.filter_date,
+        "min_value": (all_dates[-1] if all_dates else None),
+        "max_value": (all_dates[0]  if all_dates else None),
+        "key": "filter_date"
+    }
+    if not st.session_state.filter_use_date:
+        date_input_args["disabled"] = True
+    st.sidebar.date_input(**date_input_args)
     st.sidebar.text_input("Search", "", key="filter_keyword")
     st.sidebar.checkbox("Show open only", key="filter_open")
     st.sidebar.markdown("---")
@@ -222,7 +228,7 @@ def main():
     st.sidebar.date_input("Delete date", key="del_date")
     st.sidebar.button("Delete on date", on_click=delete_by_date_callback)
 
-    # — Main header —
+    # Main header
     user = st.session_state.current_user
     st.markdown(
         f"<h1 style='text-align:center;color:{USER_COLORS[user]}'>{user}</h1>",
@@ -230,7 +236,7 @@ def main():
     )
     st.markdown("---")
 
-    # — New comment form —
+    # New comment form
     st.subheader("Add a new comment")
     st.selectbox(
         "Category",
@@ -239,9 +245,8 @@ def main():
         key="new_category"
     )
 
-    # dynamic key for this render
+    # dynamic editor key
     editor_key = f"new_content_{st.session_state.editor_version}"
-
     if HAS_QUILL:
         st_quill(html=True, key=editor_key)
     elif HAS_ACE:
@@ -249,17 +254,17 @@ def main():
     else:
         st.text_area("Comment", key=editor_key, height=200)
 
-    # Buttons side by side
+    # buttons side-by-side
     c1, c2 = st.columns(2)
     with c1:
         st.button("Add comment", on_click=add_comment_callback, args=(editor_key,))
     with c2:
         st.button("Clear comment", on_click=clear_comment_callback, args=(editor_key,))
 
-    # — Display entries —
+    # display entries
     filtered = []
     for idx, e in enumerate(st.session_state.entries):
-        if get_entry_date(e) != st.session_state.filter_date:
+        if st.session_state.filter_use_date and get_entry_date(e) != st.session_state.filter_date:
             continue
         if st.session_state.filter_open and e["closed"]:
             continue
@@ -273,31 +278,22 @@ def main():
         for i, (idx, e) in enumerate(filtered):
             if i > 0:
                 st.divider()
-
             st.markdown(
-                f"{colored_name(e['user'])} {category_label(e['category'])} — "
-                f"<em>{e['datetime']}</em>",
+                f"{colored_name(e['user'])} {category_label(e['category'])} — <em>{e['datetime']}</em>",
                 unsafe_allow_html=True
             )
-
             if not e["closed"]:
-                st.button("Close", key=f"close_{idx}",
-                          on_click=close_entry_callback, args=(idx,))
+                st.button("Close", key=f"close_{idx}", on_click=close_entry_callback, args=(idx,))
             else:
                 st.markdown("**Closed**")
-
             st.markdown(e["comment"], unsafe_allow_html=True)
-
-            for r in e["replies"]:
+            for r in e.get("replies", []):
                 st.markdown(
                     f"> **{r['user']}** — {r['datetime']}\n> {r['comment']}",
                     unsafe_allow_html=True
                 )
-
             if not e["closed"]:
-                st.button("Reply", key=f"reply_btn_{idx}",
-                          on_click=lambda i=idx: st.session_state.__setitem__("active_reply", i))
-
+                st.button("Reply", key=f"reply_btn_{idx}", on_click=lambda i=idx: st.session_state.__setitem__("active_reply", i))
             if not e["closed"] and st.session_state.active_reply == idx:
                 reply_key = f"reply_content_{idx}"
                 if HAS_QUILL:
@@ -306,11 +302,7 @@ def main():
                     st_ace(language="html", theme="monokai", key=reply_key, height=150)
                 else:
                     st.text_area("Your reply", key=reply_key, height=150)
-
-                st.button("Send reply",
-                          key=f"send_rep_{idx}",
-                          on_click=send_reply_callback,
-                          args=(idx,))
+                st.button("Send reply", key=f"send_rep_{idx}", on_click=send_reply_callback, args=(idx,))
 
 if __name__ == "__main__":
     main()
