@@ -112,6 +112,8 @@ def get_entry_date(e):
 def strip_empty_paragraphs(html: str) -> str:
     return re.sub(r'(?i)<p>(?:\s|<br\s*/?>)*</p>', '', html).strip()
 
+# -- Callbacks --
+
 def add_comment_callback():
     raw = st.session_state.new_content or ""
     cleaned = strip_empty_paragraphs(raw)
@@ -126,6 +128,9 @@ def add_comment_callback():
         }
         st.session_state.entries.insert(0, entry)
         save_entries(st.session_state.entries)
+    # **do not clear here** — let the Clear button handle it
+
+def clear_comment_callback():
     st.session_state.new_content = ""
 
 def close_entry_callback(idx):
@@ -163,14 +168,16 @@ def delete_by_date_callback():
             if get_entry_date(e) != st.session_state.del_date
         ]
         save_entries(st.session_state.entries)
-        st.sidebar.success(f"Deleted {before - len(st.session_state.entries)} entries on {st.session_state.del_date}")
+        st.sidebar.success(
+            f"Deleted {before - len(st.session_state.entries)} entries on {st.session_state.del_date}"
+        )
     else:
         st.sidebar.error("Invalid password or date")
 
 def main():
     st.set_page_config(page_title="Logger", layout="wide")
 
-    # initialize session state with defaults
+    # -- init session state defaults --
     defaults = {
         "entries":        load_entries(),
         "current_user":   USERS[0],
@@ -187,7 +194,7 @@ def main():
         if k not in st.session_state:
             st.session_state[k] = v
 
-    # Sidebar: user & filters
+    # -- Sidebar --
     st.sidebar.header("User")
     st.sidebar.radio("Select user:", USERS, key="current_user")
     st.sidebar.markdown("---")
@@ -214,7 +221,7 @@ def main():
     st.sidebar.date_input("Delete date", key="del_date")
     st.sidebar.button("Delete on date", on_click=delete_by_date_callback)
 
-    # Main header
+    # -- Main header --
     user = st.session_state.current_user
     st.markdown(
         f"<h1 style='text-align:center;color:{USER_COLORS[user]}'>{user}</h1>",
@@ -222,7 +229,7 @@ def main():
     )
     st.markdown("---")
 
-    # New comment form
+    # -- New comment form --
     st.subheader("Add a new comment")
     st.selectbox(
         "Category",
@@ -231,6 +238,7 @@ def main():
         key="new_category"
     )
 
+    # editor
     if has_quill:
         st_quill(value=st.session_state.new_content, html=True, key="new_content")
     elif has_ace:
@@ -242,18 +250,20 @@ def main():
     else:
         st.text_area("Comment", height=200, key="new_content")
 
-    st.button("Add comment", on_click=add_comment_callback)
+    # two side-by-side buttons
+    col1, col2 = st.columns([1,1])
+    with col1:
+        st.button("Add comment", on_click=add_comment_callback)
+    with col2:
+        st.button("Clear comment", on_click=clear_comment_callback)
 
-    # Display filtered entries
+    # -- Display filtered entries --
     filtered = []
     for idx, e in enumerate(st.session_state.entries):
-        # date filter
         if get_entry_date(e) != st.session_state.filter_date:
             continue
-        # open-only filter
         if st.session_state.filter_open and e["closed"]:
             continue
-        # keyword filter
         kw = st.session_state.filter_keyword.lower()
         if kw and kw not in e["comment"].lower():
             continue
@@ -273,8 +283,12 @@ def main():
             )
 
             if not e["closed"]:
-                st.button("Close", key=f"close_{idx}",
-                          on_click=close_entry_callback, args=(idx,))
+                st.button(
+                    "Close",
+                    key=f"close_{idx}",
+                    on_click=close_entry_callback,
+                    args=(idx,)
+                )
             else:
                 st.markdown("**Closed**")
 
@@ -288,25 +302,36 @@ def main():
 
             if not e["closed"]:
                 st.button(
-                    "Reply", key=f"reply_btn_{idx}",
+                    "Reply",
+                    key=f"reply_btn_{idx}",
                     on_click=lambda i=idx: st.session_state.__setitem__("active_reply", i)
                 )
 
             if not e["closed"] and st.session_state.active_reply == idx:
                 reply_key = f"reply_content_{idx}"
                 if has_quill:
-                    st_quill(value=st.session_state.get(reply_key, ""), html=True, key=reply_key)
+                    st_quill(
+                        value=st.session_state.get(reply_key, ""),
+                        html=True,
+                        key=reply_key
+                    )
                 elif has_ace:
                     st_ace(
                         value=st.session_state.get(reply_key, ""),
-                        language="html", theme="monokai",
-                        key=reply_key, height=150
+                        language="html",
+                        theme="monokai",
+                        key=reply_key,
+                        height=150
                     )
                 else:
                     st.text_area("Your reply", key=reply_key, height=150)
 
-                st.button("Send reply", key=f"send_rep_{idx}",
-                          on_click=send_reply_callback, args=(idx,))
+                st.button(
+                    "Send reply",
+                    key=f"send_rep_{idx}",
+                    on_click=send_reply_callback,
+                    args=(idx,)
+                )
 
 if __name__ == "__main__":
     main()
