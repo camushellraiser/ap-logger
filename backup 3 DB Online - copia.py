@@ -230,8 +230,7 @@ def main():
         st.text_area("Comment", height=200, key="new_content")
 
     # add comment button (clears editor on click)
-    if st.button("Add comment"):
-        add_comment_callback()
+    st.button("Add comment", on_click=add_comment_callback)
 
     # Display entries with separators
     filtered = []
@@ -287,8 +286,7 @@ def main():
                 elif has_ace:
                     st_ace(
                         value=st.session_state.get(reply_key, ""),
-                        language="html", theme="monokai",
-                        key=reply_key, height=150
+                        language="html", theme="monokai", key=reply_key, height=150
                     )
                 else:
                     st.text_area("Your reply", key=reply_key, height=150)
