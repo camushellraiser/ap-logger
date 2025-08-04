@@ -128,10 +128,11 @@ def add_comment_callback():
         }
         st.session_state.entries.insert(0, entry)
         save_entries(st.session_state.entries)
-    # **do not clear here** — let the Clear button handle it
+    # don't clear here
 
 def clear_comment_callback():
     st.session_state.new_content = ""
+    st.experimental_rerun()
 
 def close_entry_callback(idx):
     st.session_state.entries[idx]["closed"] = True
@@ -177,7 +178,7 @@ def delete_by_date_callback():
 def main():
     st.set_page_config(page_title="Logger", layout="wide")
 
-    # -- init session state defaults --
+    # -- initialize session state --
     defaults = {
         "entries":        load_entries(),
         "current_user":   USERS[0],
@@ -238,7 +239,7 @@ def main():
         key="new_category"
     )
 
-    # editor
+    # editor widget
     if has_quill:
         st_quill(value=st.session_state.new_content, html=True, key="new_content")
     elif has_ace:
@@ -250,8 +251,8 @@ def main():
     else:
         st.text_area("Comment", height=200, key="new_content")
 
-    # two side-by-side buttons
-    col1, col2 = st.columns([1,1])
+    # two buttons side-by-side
+    col1, col2 = st.columns(2)
     with col1:
         st.button("Add comment", on_click=add_comment_callback)
     with col2:
