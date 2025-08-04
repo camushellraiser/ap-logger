@@ -127,7 +127,6 @@ def add_comment_callback():
         }
         st.session_state.entries.insert(0, entry)
         save_entries(st.session_state.entries)
-    # clear the editor
     st.session_state.new_content = ""
 
 def close_entry_callback(idx):
@@ -172,13 +171,12 @@ def delete_by_date_callback():
 def main():
     st.set_page_config(page_title="Logger", layout="wide")
 
-    # -- initialize session state with defaults --
+    # initialize session state with defaults
     defaults = {
         "entries":        load_entries(),
         "current_user":   USERS[0],
         "new_category":   CATEGORIES[0],
-        # default filter_date to today:
-        "filter_date":    date.today(),
+        "filter_date":    None,
         "new_content":    "",
         "active_reply":   None,
         "admin_pwd":      "",
@@ -189,7 +187,11 @@ def main():
         if k not in st.session_state:
             st.session_state[k] = v
 
-    # -- Sidebar: user & filters --
+    # force filter_date to today if not set
+    if not st.session_state.filter_date:
+        st.session_state.filter_date = date.today()
+
+    # Sidebar: user & filters
     st.sidebar.header("User")
     st.sidebar.radio("Select user:", USERS, key="current_user")
     st.sidebar.markdown("---")
@@ -215,7 +217,7 @@ def main():
     st.sidebar.date_input("Delete date", key="del_date")
     st.sidebar.button("Delete on date", on_click=delete_by_date_callback)
 
-    # -- Main header --
+    # Main header
     user = st.session_state.current_user
     st.markdown(
         f"<h1 style='text-align:center;color:{USER_COLORS[user]}'>{user}</h1>",
@@ -223,7 +225,7 @@ def main():
     )
     st.markdown("---")
 
-    # -- New comment form --
+    # New comment form
     st.subheader("Add a new comment")
     st.selectbox(
         "Category",
@@ -233,29 +235,22 @@ def main():
     )
 
     if has_quill:
-        st_quill(
-            value=st.session_state.new_content,
-            html=True,
-            key="new_content"
-        )
+        st_quill(value=st.session_state.new_content, html=True, key="new_content")
     elif has_ace:
         st_ace(
             value=st.session_state.new_content,
-            language="html",
-            theme="monokai",
-            key="new_content",
-            height=200
+            language="html", theme="monokai",
+            key="new_content", height=200
         )
     else:
         st.text_area("Comment", height=200, key="new_content")
 
-    # wire the button so clearing is allowed
     st.button("Add comment", on_click=add_comment_callback)
 
-    # -- Display only today's (or selected) entries --
+    # Display only filtered entries (today by default)
     filtered = []
     for idx, e in enumerate(st.session_state.entries):
-        if st.session_state.filter_date and get_entry_date(e) != st.session_state.filter_date:
+        if get_entry_date(e) != st.session_state.filter_date:
             continue
         kw = st.session_state.filter_keyword.lower()
         if kw and kw not in e["comment"].lower():
@@ -268,7 +263,6 @@ def main():
             if i > 0:
                 st.divider()
 
-            # header line
             st.markdown(
                 f"{colored_name(e['user'])} "
                 f"{category_label(e['category'])} — "
@@ -276,60 +270,41 @@ def main():
                 unsafe_allow_html=True
             )
 
-            # close button / closed state
             if not e["closed"]:
-                st.button(
-                    "Close",
-                    key=f"close_{idx}",
-                    on_click=close_entry_callback,
-                    args=(idx,)
-                )
+                st.button("Close", key=f"close_{idx}",
+                          on_click=close_entry_callback, args=(idx,))
             else:
                 st.markdown("**Closed**")
 
-            # the comment itself (HTML)
             st.markdown(e["comment"], unsafe_allow_html=True)
 
-            # replies
             for r in e.get("replies", []):
                 st.markdown(
                     f"> **{r['user']}** — {r['datetime']}\n> {r['comment']}",
                     unsafe_allow_html=True
                 )
 
-            # reply UI
             if not e["closed"]:
                 st.button(
-                    "Reply",
-                    key=f"reply_btn_{idx}",
+                    "Reply", key=f"reply_btn_{idx}",
                     on_click=lambda i=idx: st.session_state.__setitem__("active_reply", i)
                 )
 
             if not e["closed"] and st.session_state.active_reply == idx:
                 reply_key = f"reply_content_{idx}"
                 if has_quill:
-                    st_quill(
-                        value=st.session_state.get(reply_key, ""),
-                        html=True,
-                        key=reply_key
-                    )
+                    st_quill(value=st.session_state.get(reply_key, ""), html=True, key=reply_key)
                 elif has_ace:
                     st_ace(
                         value=st.session_state.get(reply_key, ""),
-                        language="html",
-                        theme="monokai",
-                        key=reply_key,
-                        height=150
+                        language="html", theme="monokai",
+                        key=reply_key, height=150
                     )
                 else:
                     st.text_area("Your reply", key=reply_key, height=150)
 
-                st.button(
-                    "Send reply",
-                    key=f"send_rep_{idx}",
-                    on_click=send_reply_callback,
-                    args=(idx,)
-                )
+                st.button("Send reply", key=f"send_rep_{idx}",
+                          on_click=send_reply_callback, args=(idx,))
 
 if __name__ == "__main__":
     main()
