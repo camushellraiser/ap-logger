@@ -1,5 +1,9 @@
 import streamlit as st
 import re
+from datetime import datetime, date
+import pytz
+from pytz import timezone
+
 try:
     from streamlit_quill import st_quill
     has_quill = True
@@ -14,19 +18,16 @@ except ImportError:
 
 import psycopg2
 import psycopg2.extras
-from datetime import datetime
-import pytz
-from pytz import timezone
 import json
 
 # --- Neon DB connection ---
 PG_CONN = {
-    "dbname": "neondb",
-    "user": "neondb_owner",
+    "dbname":   "neondb",
+    "user":     "neondb_owner",
     "password": "npg_RpJPZ5dGLhm9",
-    "host": "ep-tiny-voice-afh7l7cf-pooler.c-2.us-west-2.aws.neon.tech",
-    "port": "5432",
-    "sslmode": "require"
+    "host":     "ep-tiny-voice-afh7l7cf-pooler.c-2.us-west-2.aws.neon.tech",
+    "port":     "5432",
+    "sslmode":  "require"
 }
 
 # --- UI constants ---
@@ -69,9 +70,8 @@ def load_entries():
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
             cur.execute("SELECT * FROM logger_entries ORDER BY id DESC")
             rows = cur.fetchall()
-    entries = []
-    for r in rows:
-        entries.append({
+    return [
+        {
             "id":       r["id"],
             "user":     r["user_name"],
             "category": r["category"],
@@ -79,8 +79,9 @@ def load_entries():
             "datetime": r["datetime"],
             "replies":  r["replies"] or [],
             "closed":   r["closed"]
-        })
-    return entries
+        }
+        for r in rows
+    ]
 
 def save_entries(entries):
     with get_pg_conn() as conn:
@@ -91,7 +92,7 @@ def save_entries(entries):
                     """
                     INSERT INTO logger_entries
                       (user_name, category, comment, datetime, replies, closed)
-                    VALUES (%s, %s, %s, %s, %s, %s)
+                    VALUES (%s,%s,%s,%s,%s,%s)
                     """,
                     (
                         e["user"], e["category"], e["comment"], e["datetime"],
@@ -108,16 +109,18 @@ def get_entry_date(e):
     except:
         return None
 
+def strip_empty_paragraphs(html: str) -> str:
+    # remove any <p> that wraps only whitespace or <br>
+    return re.sub(r'(?i)<p>(?:\s|<br\s*/?>)*</p>', '', html).strip()
+
 def add_comment_callback():
     raw = st.session_state.new_content or ""
-    # strip out trailing empty <p><br></p> blocks from Quill HTML
-    raw = re.sub(r'(?i)(<p>(<br\s*/?>)?</p>\s*)+$', "", raw)
-    content = raw.strip()
-    if content:
+    cleaned = strip_empty_paragraphs(raw)
+    if cleaned:
         entry = {
             "user":     st.session_state.current_user,
             "category": st.session_state.new_category,
-            "comment":  content,
+            "comment":  cleaned,
             "datetime": format_datetime_pst(datetime.now(pytz.utc)),
             "replies":  [],
             "closed":   False
@@ -134,12 +137,11 @@ def close_entry_callback(idx):
 def send_reply_callback(idx):
     key = f"reply_content_{idx}"
     raw = st.session_state.get(key, "") or ""
-    raw = re.sub(r'(?i)(<p>(<br\s*/?>)?</p>\s*)+$', "", raw)
-    content = raw.strip()
-    if content:
+    cleaned = strip_empty_paragraphs(raw)
+    if cleaned:
         reply = {
             "user":     st.session_state.current_user,
-            "comment":  content,
+            "comment":  cleaned,
             "datetime": format_datetime_pst(datetime.now(pytz.utc))
         }
         st.session_state.entries[idx]["replies"].append(reply)
@@ -170,36 +172,38 @@ def delete_by_date_callback():
 def main():
     st.set_page_config(page_title="Logger", layout="wide")
 
-    # initialize session state with defaults
+    # -- initialize session state with defaults --
     defaults = {
         "entries":        load_entries(),
         "current_user":   USERS[0],
         "new_category":   CATEGORIES[0],
+        # default filter_date to today:
+        "filter_date":    date.today(),
         "new_content":    "",
         "active_reply":   None,
         "admin_pwd":      "",
         "del_date":       None,
-        "filter_date":    None,
         "filter_keyword": ""
     }
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
 
-    # Sidebar
+    # -- Sidebar: user & filters --
     st.sidebar.header("User")
     st.sidebar.radio("Select user:", USERS, key="current_user")
     st.sidebar.markdown("---")
 
     st.sidebar.header("Filter")
-    dates = sorted(
+    all_dates = sorted(
         {d for e in st.session_state.entries if (d := get_entry_date(e))},
         reverse=True
     )
     st.sidebar.date_input(
-        "Date", value=None,
-        min_value=(dates[-1] if dates else None),
-        max_value=(dates[0]  if dates else None),
+        "Date",
+        value=st.session_state.filter_date,
+        min_value=(all_dates[-1] if all_dates else None),
+        max_value=(all_dates[0]  if all_dates else None),
         key="filter_date"
     )
     st.sidebar.text_input("Search", "", key="filter_keyword")
@@ -211,7 +215,7 @@ def main():
     st.sidebar.date_input("Delete date", key="del_date")
     st.sidebar.button("Delete on date", on_click=delete_by_date_callback)
 
-    # Main header
+    # -- Main header --
     user = st.session_state.current_user
     st.markdown(
         f"<h1 style='text-align:center;color:{USER_COLORS[user]}'>{user}</h1>",
@@ -219,10 +223,11 @@ def main():
     )
     st.markdown("---")
 
-    # New comment
+    # -- New comment form --
     st.subheader("Add a new comment")
     st.selectbox(
-        "Category", CATEGORIES,
+        "Category",
+        CATEGORIES,
         format_func=lambda c: f"{ICONS[c]} {c}",
         key="new_category"
     )
@@ -244,10 +249,10 @@ def main():
     else:
         st.text_area("Comment", height=200, key="new_content")
 
-    # wire the button via on_click so clearing session_state.new_content is allowed
+    # wire the button so clearing is allowed
     st.button("Add comment", on_click=add_comment_callback)
 
-    # Display entries...
+    # -- Display only today's (or selected) entries --
     filtered = []
     for idx, e in enumerate(st.session_state.entries):
         if st.session_state.filter_date and get_entry_date(e) != st.session_state.filter_date:
@@ -263,13 +268,15 @@ def main():
             if i > 0:
                 st.divider()
 
-            header_html = (
+            # header line
+            st.markdown(
                 f"{colored_name(e['user'])} "
                 f"{category_label(e['category'])} — "
-                f"<em>{e['datetime']}</em>"
+                f"<em>{e['datetime']}</em>",
+                unsafe_allow_html=True
             )
-            st.markdown(header_html, unsafe_allow_html=True)
 
+            # close button / closed state
             if not e["closed"]:
                 st.button(
                     "Close",
@@ -280,14 +287,17 @@ def main():
             else:
                 st.markdown("**Closed**")
 
+            # the comment itself (HTML)
             st.markdown(e["comment"], unsafe_allow_html=True)
 
+            # replies
             for r in e.get("replies", []):
                 st.markdown(
                     f"> **{r['user']}** — {r['datetime']}\n> {r['comment']}",
                     unsafe_allow_html=True
                 )
 
+            # reply UI
             if not e["closed"]:
                 st.button(
                     "Reply",
