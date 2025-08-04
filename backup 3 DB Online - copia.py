@@ -170,12 +170,12 @@ def delete_by_date_callback():
 def main():
     st.set_page_config(page_title="Logger", layout="wide")
 
-    # initialize session state
+    # initialize session state with defaults
     defaults = {
         "entries":        load_entries(),
         "current_user":   USERS[0],
         "new_category":   CATEGORIES[0],
-        "filter_date":    None,
+        "filter_date":    date.today(),
         "filter_keyword": "",
         "filter_open":    False,
         "new_content":    "",
@@ -186,10 +186,6 @@ def main():
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
-
-    # default filter_date to today and filter_open to False
-    if not st.session_state.filter_date:
-        st.session_state.filter_date = date.today()
 
     # Sidebar: user & filters
     st.sidebar.header("User")
@@ -251,10 +247,13 @@ def main():
     # Display filtered entries
     filtered = []
     for idx, e in enumerate(st.session_state.entries):
+        # date filter
         if get_entry_date(e) != st.session_state.filter_date:
             continue
+        # open-only filter
         if st.session_state.filter_open and e["closed"]:
             continue
+        # keyword filter
         kw = st.session_state.filter_keyword.lower()
         if kw and kw not in e["comment"].lower():
             continue
