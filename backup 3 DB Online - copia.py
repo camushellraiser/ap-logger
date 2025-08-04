@@ -110,7 +110,6 @@ def get_entry_date(e):
         return None
 
 def strip_empty_paragraphs(html: str) -> str:
-    # remove any <p> that wraps only whitespace or <br>
     return re.sub(r'(?i)<p>(?:\s|<br\s*/?>)*</p>', '', html).strip()
 
 def add_comment_callback():
@@ -171,23 +170,24 @@ def delete_by_date_callback():
 def main():
     st.set_page_config(page_title="Logger", layout="wide")
 
-    # initialize session state with defaults
+    # initialize session state
     defaults = {
         "entries":        load_entries(),
         "current_user":   USERS[0],
         "new_category":   CATEGORIES[0],
         "filter_date":    None,
+        "filter_keyword": "",
+        "filter_open":    False,
         "new_content":    "",
         "active_reply":   None,
         "admin_pwd":      "",
-        "del_date":       None,
-        "filter_keyword": ""
+        "del_date":       None
     }
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
 
-    # force filter_date to today if not set
+    # default filter_date to today and filter_open to False
     if not st.session_state.filter_date:
         st.session_state.filter_date = date.today()
 
@@ -209,6 +209,7 @@ def main():
         key="filter_date"
     )
     st.sidebar.text_input("Search", "", key="filter_keyword")
+    st.sidebar.checkbox("Show open only", key="filter_open")
     st.sidebar.markdown("---")
 
     st.sidebar.subheader("Admin: Delete")
@@ -247,10 +248,12 @@ def main():
 
     st.button("Add comment", on_click=add_comment_callback)
 
-    # Display only filtered entries (today by default)
+    # Display filtered entries
     filtered = []
     for idx, e in enumerate(st.session_state.entries):
         if get_entry_date(e) != st.session_state.filter_date:
+            continue
+        if st.session_state.filter_open and e["closed"]:
             continue
         kw = st.session_state.filter_keyword.lower()
         if kw and kw not in e["comment"].lower():
